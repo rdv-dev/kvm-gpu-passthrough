@@ -179,6 +179,9 @@ Also for games VM, I reduced the number of cores from 3 to 2 to give the host sy
 ## Work VM
 Regarding the work VM, I went to Settings > System > Displays > Graphics > Advanced and set NVIDIA T500 to the default GPU.
 
+# Backups
+More details to come on this when I get it 100% ironed out. The general idea is to perform an external backup once per month. When the month is done, commit the external backup to the main qcow2, then create a new backup point. Repeat. This way if anything goes wrong during the month, rolling back is as easy as setting the storage to point to the main qcow2 file.
+
 # VM Migration
 Given that my use case is using BitLocker and TPM, I've had a terrible time migrating VMs from one machine to another. I would prefer to install anew versus migrating.
 
@@ -202,3 +205,5 @@ Here is why I believe this would be an improvement:
 ### Cons
 * Heat
   * External drives are not known for cooling themselves well and could cause the storage to thermal throttle under continuous or high usage.
+* Lack of in-built backup mechanism
+  * While qcow2 is relatively slow compared to a nvme external device, what qcow2 does provide is a reliable backup solution with internal and external backups in case something goes wrong.
