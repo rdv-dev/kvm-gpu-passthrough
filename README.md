@@ -14,7 +14,7 @@ The purpose of this repository is to document my specific situation for myself a
 
 Paid $480 on eBay for the computer, so fairly good deal given the recent hardware.
 
-FYI I will be providing commands run from the Fedora perspective. I leave it as an exercise for the reader to translate the commands to their host OS, thankfully many commands are the same.
+FYI I will be providing commands run from the Fedora perspective. I leave it as an exercise for the reader to translate the commands to their host OS, thankfully many commands are ubiquitous.
 
 My use case is I want to use Linux first and Windows as needed. I consider the Windows install to be 100% volitile and can be blown away at any time and the guest OS reinstalled if need be without much fuss beyond normal install/setup. 
 
@@ -154,7 +154,7 @@ Summary
 </hostdev>
 ```
 
-Switch over to overview mode and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra <controller> tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that <controller> tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
+Switch over to overview mode and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra controller tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that controller tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
 
 ## Configure Video Virtio
 ```
@@ -180,16 +180,16 @@ Here is why I believe this would be an improvement:
 
 ### Pros
 * Increased Security
- * Both VMs are secured using BitLocker. The BitLocker key data is stored via emulated TPM on LUKS encrypted Linux root partition.
- * If someone were to get a hold of the external drive and laptop, in order to decrypt the drive quickly they would need to:
-  * Have physical access to the laptop
-  * Be able to decrypt the Linux root parition
- * Neither the laptop or the VMs are vulnerable to a physical sniffing for the key to be transferred from TPM to another device
+  * Both VMs are secured using BitLocker. The BitLocker key data is stored via emulated TPM on LUKS encrypted Linux root partition.
+  * If someone were to get a hold of the external drive and laptop, in order to decrypt the drive quickly they would need to:
+    * Have physical access to the laptop
+    * Be able to decrypt the Linux root parition
+  * Neither the laptop or the VMs are vulnerable to a physical sniffing for the key to be transferred from TPM to another device
 * Reduced space load on Laptop drive
 * Theoretical drive read/write speed increase
- * The theory being that qcow2 presents at least one additional abstraction layer in order to read/write
- * Attaching a USB 4/Thunderbolt device will be less than PCIe speed but nonetheless a direct read/write process, eliminating an abstraction layer and performing read/writes directly to the device through normal OS channels
+  * The theory being that qcow2 presents at least one additional abstraction layer in order to read/write
+  * Attaching a USB 4/Thunderbolt device will be less than PCIe speed but nonetheless a direct read/write process, eliminating an abstraction layer and performing read/writes directly to the device through normal OS channels
 
 ### Cons
 * Heat
- * External drives are not known for cooling themselves well and could cause the storage to thermal throttle under continuous or high usage.
+  * External drives are not known for cooling themselves well and could cause the storage to thermal throttle under continuous or high usage.
