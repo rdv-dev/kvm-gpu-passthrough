@@ -3,14 +3,16 @@ The purpose of this repository is to document my specific situation for myself a
 
 # My Situation
 * Hardware - Dell Precision 3560 (17" Laptop)
- * Manufactured in 2022
- * NVIDIA Quadro T500 Mobile (TU117GLM)
- * Intel 11th Gen i7-1185G7 3.0 GHz
- * 32 GB RAM
- * HDMI Port
- * Monitors: 1080p LCD panel + 1440p Desktop panel
+  * Manufactured in 2022
+  * NVIDIA Quadro T500 Mobile (TU117GLM)
+  * Intel 11th Gen i7-1185G7 3.0 GHz
+  * 32 GB RAM
+  * HDMI Port, 2x Thunderbolt ports with DisplayPort
+  * Monitors: 1080p LCD panel + 1440p Desktop panel
 * Host Operating System - Fedora KDE 42 (at time of commit)
- * LUKS encrypted root partition
+  * LUKS encrypted root partition
+
+Paid $480 on eBay for the computer, so fairly good deal given the recent hardware.
 
 FYI I will be providing commands run from the Fedora perspective. I leave it as an exercise for the reader to translate the commands to their host OS, thankfully many commands are the same.
 
@@ -20,14 +22,42 @@ My work requires me to have a Windows machine, and I would prefer to only mainta
 
 I won't be using CPU pinning because, well it's a laptop, it's cooled by hopes and dreams, but mainly by a 2-inch blower fan. I'm trusting the Linux Scheduler to spread the load across 6 of the 8 CPU threads.
 
-## Nuances
-The nuances of this hardware is that the NVIDIA GPU (dGPU) might fall within the Optimus case. In short, this means that the Intel iGPU is primary and the dGPU is secondary. Anything that is rendered by the dGPU goes through the iGPU (massive generalization). In other words, the dGPU does not have its own dedicated port to drive a monitor, [as far as I understand](https://lantian.pub/en/article/modify-computer/laptop-intel-nvidia-optimus-passthrough.lantian/).
+## Discovery
+This procedure helped me to understand the hardware of my machine better and helped guide my next steps.
 
-Now, this specific hardware configuration may be different from Optimus in some way, but as far as I know, I don't have a real way of verifying that beyond saying "what I've done works" and "trust me bro" which I do not recommend. If there is a way to find out definitively, let me know after reading the Preparation section. Your mileage may vary.
+```
+cd /sys/class/drm
+ls -la
+```
 
-Given these nuances, in my testing of this machine I found that games (Farcry: Primal, No Man's Sky) run at a higher frame rate and at a higher resolution on a Windows VM with GPU passthrough than directly through Linux. This could be an effect of improper or missing Linux configuration, or was treated like an Optimus case by Linux even if it might not be, and therefore hurt the performance. I have not tested Windows natively on this machine.
+Result:
+```
+total 0
+drwxr-xr-x  2 root root    0 May 17 13:27 .
+drwxr-xr-x 88 root root    0 May 17 13:27 ..
+lrwxrwxrwx  1 root root    0 May 17 13:28 card1 -> ../../devices/pci0000:00/0000:00:02.0/drm/card1
+lrwxrwxrwx  1 root root    0 May 17 13:28 card1-DP-1 -> ../../devices/pci0000:00/0000:00:02.0/drm/card1/card1-DP-1
+lrwxrwxrwx  1 root root    0 May 17 13:28 card1-DP-2 -> ../../devices/pci0000:00/0000:00:02.0/drm/card1/card1-DP-2
+lrwxrwxrwx  1 root root    0 May 17 13:28 card1-eDP-1 -> ../../devices/pci0000:00/0000:00:02.0/drm/card1/card1-eDP-1
+lrwxrwxrwx  1 root root    0 May 17 13:28 card1-HDMI-A-1 -> ../../devices/pci0000:00/0000:00:02.0/drm/card1/card1-HDMI-A-1
+lrwxrwxrwx  1 root root    0 May 17 13:28 renderD128 -> ../../devices/pci0000:00/0000:00:02.0/drm/renderD128
+-r--r--r--  1 root root 4096 May 17 13:28 version
+```
 
-Somehow, despite the possible Optimus case, the NVIDIA GPU was able to be decoupled from Linux and handed to the VM. The device shows up in the guest as expected, and when it is used to render things, the usage can be monitored through basic Windows Task Manager. I don't understand why it works.
+The important things here are card1-DP1, card1-DP-2, card1-eDP-1 and card1-HDMI-A-1 . As far as I understand, these map to Thunderbolt ports 1 and 2, the laptop's internal LCD panel, and the HDMI port respectively.
+
+All of these are symbolic links, and they point to pci device 0000:00:02.0. Which device is that?
+
+```
+lspci -s 0000:00:02.0
+```
+
+Result:
+```
+00:02.0 VGA compatible controller: Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics] (rev 01)
+```
+
+So what this means is that the Intel iGPU is the only one physically connected to any display output, which means that the Intel iGPU does the final rendering. The NVIDIA GPU only does heavy lifting rendering/computation tasks, and ultimately will ALWAYS pass any final rendering to screen to the Intel iGPU. So, we need to create a similar situation with our VM and keep in mind that the Intel iGPU will always be engaged no matter what we do.
 
 # Preparation
 
@@ -35,51 +65,16 @@ I have followed [these steps provided by SysGuides](https://sysguides.com/instal
 
 I have also followed [these steps provided by SysGuides](https://sysguides.com/install-a-windows-11-virtual-machine-on-kvm) regarding the Windows guest VM configuration. The most important steps here is the XML configuration. I think there may be some magic config in here that allowed my situation to work better, but I have not identified which part is responsible.
 
-These next steps are the general, heavy handed approach to prepare the dGPU for unbinding from Linux and binding to vfio for use by KVM and the VMs. This is my current configuration.
-* Blacklist nouveau driver
-* Setup kernel parameters
-* Configure vfio
-* Autostart vfio kernel modules on boot
+## Bind GPU to VFIO
+These are the steps I'm using to bind the dGPU to VFIO for use by KVM and the VMs.
+* Configure modprobe
+* Configure dracut
 * Rebuild initramfs
 
-[These steps from the Arch Wiki](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF) are probably better.
-
-### Side Note
-[Here's a fancy resource](https://github.com/bryansteiner/gpu-passthrough-tutorial/?tab=readme-ov-file#----part-2-vm-logistics) for dynamically binding and unbinding the dGPU based on the VM state (up/down), although this is a desktop environment which may be less complex than the laptop environment
-
-## Optimus
-This is the [RPM fusion guide for installing NVIDIA proprietary drivers](https://rpmfusion.org/Howto/%20NVIDIA) on Fedora, just using this as a reference for the next few commands.
-```
-/sbin/lspci | grep -e VGA
-```
-
-Returns:
-
-```
-00:02.0 VGA compatible controller: Intel Corporation TigerLake-LP GT2 [Iris Xe Graphics] (rev 01)
-```
-
-Where is the NVIDIA GPU??
-
-```
-/sbin/lspci | grep -e 3D
-```
-
-```
-01:00.0 3D controller: NVIDIA Corporation TU117GLM [Quadro T500 Mobile] (rev a1)
-```
-
-This is the "probably in the Optimus case" as stated by this article. If there's a better way to validate the Optimus status, let me know.
-
-## Blacklist nouveau
-```
-echo "blacklist nouveau" | sudo tee /etc/modprobe.d/blacklist-nouveau.conf
-```
-
-## Configure VFIO
+## Configure modprobe
 Find the Device ID of the dGPU
 ```
-lspci -nnk | grep -A3 NVIDIA
+lspci -k | grep -A3 NVIDIA
 ```
 
 ```
@@ -90,11 +85,15 @@ lspci -nnk | grep -A3 NVIDIA
 ```
 
 Important part here is the device ID: 10de:1fbb
+Note Kernel driver in use is nouveau, meaning vfio is not bound to the dGPU.
 
 File: /etc/modprobe.d/vfio.conf
 ```
+softdep drm pre: vfio-pci
 options vfio-pci ids=10de:1fbb disable_vga=1
 ```
+
+Note the inclusion of the Device ID with the "ids" option
 
 ## Load VFIO Kernel Modules On Boot
 File: /etc/dracut.conf.d/vfio.conf
@@ -117,13 +116,14 @@ sudo dmesg | grep -i vfio
 
 Result:
 ```
-[    1.401500] VFIO - User Level meta-driver version: 0.3
-[    1.412025] vfio_pci: add [10de:1fbb[ffffffff:ffffffff]] class 0x000000/00000000
-[  150.032209] vfio-pci 0000:01:00.0: resetting
-[  150.135676] vfio-pci 0000:01:00.0: reset done
-[  150.165138] vfio-pci 0000:01:00.0: resetting
-[  150.271853] vfio-pci 0000:01:00.0: reset done
+[    2.340558] vfio-pci 0000:01:00.0: optimus capabilities: enabled, status dynamic power, hda bios codec supported
+[  172.365263] vfio-pci 0000:01:00.0: resetting
+[  172.468808] vfio-pci 0000:01:00.0: reset done
+[  172.503476] vfio-pci 0000:01:00.0: resetting
+[  172.604890] vfio-pci 0000:01:00.0: reset done
 ```
+
+I think it's interesting that optimus is detected with vfio, implying some amount of power management may come into play. I've found that I got slightly better performance when this appeared.
 
 ```
 lspci -nnk -d 10de:1fbb
@@ -140,15 +140,41 @@ Result:
 # Virtual Machine Configuration
 Summary
 * Add PCI Device > Add GPU
-* Remove some Spice things
+* Remove Tablet device
+* Remove Channel (spice)
 * Configure Video QXL to Video Virtio
+
+## Add PCI Device for GPU
+```
+<hostdev mode="subsystem" type="pci" managed="yes">
+  <source>
+    <address domain="0x0000" bus="0x01" slot="0x00" function="0x0"/>
+  </source>
+  <address type="pci" domain="0x0000" bus="0x06" slot="0x00" function="0x0"/>
+</hostdev>
+```
+
+Switch over to overview mode and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra <controller> tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that <controller> tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
+
+## Configure Video Virtio
+```
+<video>
+  <model type="virtio" heads="1" primary="yes">
+    <acceleration accel3d="no"/>
+  </model>
+  <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0"/>
+</video>
+```
+
+## Removing Channel (spice)
+I believe what this did was allow clipboard data to pass between guest and host. Removing this was not a big deal for me and in fact increases security (password leaks).
 
 
 # VM Migration
 Given that my use case is using BitLocker and TPM, I've had a terrible time migrating VMs from one machine to another. I would prefer to install anew versus migrating.
 
 # Enhancements
-Currently my VMs utilize file-based qcow2 files for storage. One day I would like to utilize a fast external USB4/Thunderbolt SSD or NVMe drive to store, one external drive per VM.
+Currently my VMs utilize file-based qcow2 files for storage. One day I would like to utilize a fast external USB4/Thunderbolt SSD or NVMe drive to store, one external drive per VM. This could be passed to the VM as a block storage device, so it would appear to be a normal drive to the VM and to Windows (not yet tested).
 
 Here is why I believe this would be an improvement:
 
