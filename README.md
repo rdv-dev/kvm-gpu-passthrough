@@ -5,7 +5,7 @@ The purpose of this repository is to document my specific situation for myself a
 * Hardware - Dell Precision 3560 (17" Laptop)
   * Manufactured in 2022
   * NVIDIA Quadro T500 Mobile (TU117GLM)
-  * Intel 11th Gen i7-1185G7 3.0 GHz
+  * Intel 11th Gen i7-1185G7 3.0 GHz (4 cores, 8 threads)
   * 32 GB RAM
   * HDMI Port, 2x Thunderbolt ports with DisplayPort
   * Monitors: 1080p LCD panel + 1440p Desktop panel
@@ -138,11 +138,11 @@ Result:
 ```
 
 # Virtual Machine Configuration
+[VM Configuration](games-vm.xml)
 Summary
 * Add PCI Device > Add GPU
 * Remove Tablet device
 * Remove Channel (spice)
-* Configure Video QXL to Video Virtio
 
 ## Add PCI Device for GPU
 ```
@@ -156,19 +156,27 @@ Summary
 
 Switch over to overview mode and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra controller tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that controller tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
 
-## Configure Video Virtio
-```
-<video>
-  <model type="virtio" heads="1" primary="yes">
-    <acceleration accel3d="no"/>
-  </model>
-  <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0"/>
-</video>
-```
-
 ## Removing Channel (spice)
-I believe what this did was allow clipboard data to pass between guest and host. Removing this was not a big deal for me and in fact increases security (password leaks).
+I believe what this did was allow clipboard data to pass between guest and host as well as seamless mouse transition from outside to inside VM window. Removing this was not a big deal for me and in fact increases security (password leaks) and also just capturing the mouse normally into the VM makes more sense to me.
 
+# Tuning
+## Games VM
+Regarding my VM for games, I found that while QXL is significantly more performant that VFIO for Video, there were issues when it came to running the games. I have a set of cheap USB speakers that I passthrough to this VM, no more audio issues. Additionally, updated the following line in the KVM configuration:
+
+Original:
+```
+    <audio id="1" type="spice"/>
+```
+
+Updated:
+```
+    <audio id="1" type="none"/>
+```
+
+Also for games VM, I reduced the number of cores from 3 to 2 to give the host system more power to handle CPU frame generation for the game. This did reduce vertical tearing.
+
+## Work VM
+Regarding the work VM, I went to Settings > System > Displays > Graphics > Advanced and set NVIDIA T500 to the default GPU.
 
 # VM Migration
 Given that my use case is using BitLocker and TPM, I've had a terrible time migrating VMs from one machine to another. I would prefer to install anew versus migrating.
