@@ -74,7 +74,7 @@ These are the steps I'm using to bind the dGPU to VFIO for use by KVM and the VM
 ## Configure modprobe
 Find the Device ID of the dGPU
 ```
-lspci -k | grep -A3 NVIDIA
+lspci -nnk | grep -A3 NVIDIA
 ```
 
 ```
@@ -139,6 +139,7 @@ Result:
 
 # Virtual Machine Configuration
 [VM Configuration](games-vm.xml)
+
 Summary
 * Add PCI Device > Add GPU
 * Remove Tablet device
@@ -154,14 +155,14 @@ Summary
 </hostdev>
 ```
 
-Switch over to overview mode and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra controller tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that controller tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
+Review the VM configuration and validate that no other devices are on bus 0x06 and slot 0x00. I had an existing VM that had some extra controller tags that conflicted with the bus and slot that was connected to the GPU passthrough. I had to remove that controller tag, which thankfully didn't hurt anything and allowed the GPU to be utilized correctly.
 
 ## Removing Channel (spice)
 I believe what this did was allow clipboard data to pass between guest and host as well as seamless mouse transition from outside to inside VM window. Removing this was not a big deal for me and in fact increases security (password leaks) and also just capturing the mouse normally into the VM makes more sense to me.
 
 # Tuning
 ## Games VM
-Regarding my VM for games, I found that while QXL is significantly more performant that VFIO for Video, there were issues when it came to running the games. I have a set of cheap USB speakers that I passthrough to this VM, no more audio issues. Additionally, updated the following line in the KVM configuration:
+Regarding my VM for games, I found that while QXL is significantly more performant that VFIO for Video, there were massive issues with the audio. I worked around this by passing a cheap set of USB speakers to this VM, which resolved the audio issues. Additionally, updated the following line in the KVM configuration which disables any audio output to the host via spice:
 
 Original:
 ```
